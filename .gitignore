@@ -18,3 +18,4 @@ forex_data/
 *copy*.ipynb
 *.png
 models/
+test_checkpoints/
