@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
-from .models5 import GenConvResBlock32, EncConvResBlock32
+from .mnist_model import GenConvResBlock32, EncConvResBlock32
 from .datasets import MNISTEx
 from .lbae import LABE
 
@@ -299,7 +299,7 @@ def create_labe_model(channels, img_size, zsize, vae_model, kl_weight, binary_re
     # Initialize individual models with correct parameters
     # EncConvResBlock32 expects (channels, zsize, zround)
     # For zround, we'll use a default value of 4 (decimal points for quantization)
-    E = EncConvResBlock32(channels, zsize, zround=4)
+    E = EncConvResBlock32(channels, zsize, zround=-4)
     
     # GenConvResBlock32 expects (channels, dataset, zsize)  
     # We're training on MNIST, so dataset='mnist'

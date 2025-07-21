@@ -35,8 +35,6 @@ class QuantizerFunc(torch.autograd.Function):
         Returns:
             Tensor: Quantized tensor.
         """
-        # self.save_for_backward(input)
-        # self.constant = npoints
         if npoints < 0:
             x = torch.sign(input)
             x[x==0] = 1

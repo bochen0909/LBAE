@@ -19,3 +19,4 @@ forex_data/
 *.png
 models/
 test_checkpoints/
+inference_output/   
