@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from labe.train_mnist import train_mnist
+from lbae.train_mnist import train_mnist
 
 if __name__ == "__main__":
     print("Testing MNIST training with validation and early stopping...")

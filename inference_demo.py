@@ -10,8 +10,8 @@ import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
 import numpy as np
 import random
-from labe.datasets import MNISTEx
-from labe.train_mnist import get_device, create_labe_model, load_checkpoint
+from lbae.datasets import MNISTEx
+from lbae.train_mnist import get_device, create_labe_model, load_checkpoint
 
 
 def denormalize_image(tensor):
