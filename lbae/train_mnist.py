@@ -2,6 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
+from tqdm import tqdm
 from .mnist_model import GenConvResBlock32, EncConvResBlock32
 from .datasets import MNISTEx
 from .lbae import LABE
@@ -58,7 +59,10 @@ def validate_model(model, val_dataloader, device_obj, vae=False, shared_weights=
     num_batches = 0
     
     with torch.no_grad():
-        for x, target, xc in val_dataloader:
+        # Create validation progress bar
+        val_pbar = tqdm(val_dataloader, desc="Validating", leave=False, unit="batch")
+        
+        for x, target, xc in val_pbar:
             x = x.to(device_obj)
             xc = xc.to(device_obj)
             
@@ -78,6 +82,16 @@ def validate_model(model, val_dataloader, device_obj, vae=False, shared_weights=
             if vae:
                 val_kld_loss += loss_kld.item()
             num_batches += 1
+            
+            # Update validation progress bar
+            val_pbar.set_postfix({
+                'Val_Loss': f'{total_loss.item():.4f}',
+                'Val_Reco': f'{loss_reco.item():.4f}',
+                **({'Val_KLD': f'{loss_kld.item():.4f}'} if vae else {})
+            })
+        
+        # Close validation progress bar
+        val_pbar.close()
     
     avg_val_loss = val_loss / num_batches
     avg_val_reco_loss = val_reco_loss / num_batches
@@ -179,7 +193,11 @@ def train_mnist(lr=1e-4, batch_size=512, epochs_max=100,
     
     # Training loop
     best_val_loss = float('inf')
-    for epoch in range(epochs_max):
+    
+    # Create epoch progress bar
+    epoch_pbar = tqdm(range(epochs_max), desc="Training", unit="epoch")
+    
+    for epoch in epoch_pbar:
         model.train()
         
         epoch_loss = 0
@@ -187,7 +205,14 @@ def train_mnist(lr=1e-4, batch_size=512, epochs_max=100,
         epoch_kld_loss = 0
         num_batches = 0
         
-        for batch_idx, (x, target, xc) in enumerate(train_dataloader):
+        # Create batch progress bar for current epoch
+        batch_pbar = tqdm(enumerate(train_dataloader), 
+                         total=len(train_dataloader),
+                         desc=f"Epoch {epoch+1}/{epochs_max}",
+                         leave=False,
+                         unit="batch")
+        
+        for batch_idx, (x, target, xc) in batch_pbar:
             
             x = x.to(device_obj)
             xc = xc.to(device_obj)
@@ -214,13 +239,15 @@ def train_mnist(lr=1e-4, batch_size=512, epochs_max=100,
                 epoch_kld_loss += loss_kld.item()
             num_batches += 1
             
-            # Print batch statistics
-            if batch_idx % print_every_batch == 0:
-                print(f'Epoch {epoch:3d}/{epochs_max} '
-                      f'Batch {batch_idx:4d}/{len(train_dataloader)} '
-                      f'Loss: {total_loss.item():.6f} '
-                      f'Reco: {loss_reco.item():.6f} '
-                      + (f'KLD: {loss_kld.item():.6f}' if vae else ''))
+            # Update batch progress bar with current losses
+            batch_pbar.set_postfix({
+                'Loss': f'{total_loss.item():.4f}',
+                'Reco': f'{loss_reco.item():.4f}',
+                **({'KLD': f'{loss_kld.item():.4f}'} if vae else {})
+            })
+        
+        # Close batch progress bar
+        batch_pbar.close()
         
         # End of epoch statistics
         avg_loss = epoch_loss / num_batches
@@ -231,11 +258,21 @@ def train_mnist(lr=1e-4, batch_size=512, epochs_max=100,
         avg_val_loss, avg_val_reco_loss, avg_val_kld_loss = validate_model(
             model, val_dataloader, device_obj, vae, shared_weights)
         
-        print(f'=== Epoch {epoch:3d}/{epochs_max} Complete ===')
-        print(f'Train Loss: {avg_loss:.6f} | Val Loss: {avg_val_loss:.6f}')
-        print(f'Train Reco: {avg_reco_loss:.6f} | Val Reco: {avg_val_reco_loss:.6f}')
+        # Update epoch progress bar with losses
+        epoch_pbar.set_postfix({
+            'Train_Loss': f'{avg_loss:.4f}',
+            'Val_Loss': f'{avg_val_loss:.4f}',
+            'Train_Reco': f'{avg_reco_loss:.4f}',
+            'Val_Reco': f'{avg_val_reco_loss:.4f}',
+            **({'Train_KLD': f'{avg_kld_loss:.4f}', 'Val_KLD': f'{avg_val_kld_loss:.4f}'} if vae else {})
+        })
+        
+        # Print detailed epoch summary
+        tqdm.write(f'=== Epoch {epoch+1:3d}/{epochs_max} Complete ===')
+        tqdm.write(f'Train Loss: {avg_loss:.6f} | Val Loss: {avg_val_loss:.6f}')
+        tqdm.write(f'Train Reco: {avg_reco_loss:.6f} | Val Reco: {avg_val_reco_loss:.6f}')
         if vae:
-            print(f'Train KLD: {avg_kld_loss:.6f} | Val KLD: {avg_val_kld_loss:.6f}')
+            tqdm.write(f'Train KLD: {avg_kld_loss:.6f} | Val KLD: {avg_val_kld_loss:.6f}')
         
         # Save best model
         is_best = avg_val_loss < best_val_loss
@@ -259,12 +296,12 @@ def train_mnist(lr=1e-4, batch_size=512, epochs_max=100,
                        'model_path': model_path, 'early_stopping_patience': early_stopping_patience,
                        'min_delta': min_delta, 'val_split': val_split}
             }, best_model_path)
-            print(f'✓ New best model saved: {best_model_path} (Val Loss: {avg_val_loss:.6f})')
+            tqdm.write(f'✓ New best model saved: {best_model_path} (Val Loss: {avg_val_loss:.6f})')
         
         # Early stopping check
         if early_stopping(avg_val_loss, epoch):
-            print(f'\nEarly stopping triggered after {epoch + 1} epochs!')
-            print(f'Best validation loss: {early_stopping.best_loss:.6f} at epoch {early_stopping.best_epoch + 1}')
+            tqdm.write(f'\nEarly stopping triggered after {epoch + 1} epochs!')
+            tqdm.write(f'Best validation loss: {early_stopping.best_loss:.6f} at epoch {early_stopping.best_epoch + 1}')
             break
         
         # Save regular checkpoint
@@ -287,8 +324,10 @@ def train_mnist(lr=1e-4, batch_size=512, epochs_max=100,
                        'model_path': model_path, 'early_stopping_patience': early_stopping_patience,
                        'min_delta': min_delta, 'val_split': val_split}
             }, checkpoint_path)
-            print(f'Checkpoint saved: {checkpoint_path}')
-            
+            tqdm.write(f'Checkpoint saved: {checkpoint_path}')
+    
+    # Close epoch progress bar
+    epoch_pbar.close()
             
     print("\nTraining completed!")
     print(f"Best validation loss achieved: {best_val_loss:.6f}")
